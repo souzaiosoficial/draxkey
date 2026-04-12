@@ -9,7 +9,7 @@ const DB_FILE = path.join(__dirname, 'keys.json');
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Load/save keys
 function loadKeys() {
