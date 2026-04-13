@@ -9,10 +9,17 @@ const DB_FILE = path.join(__dirname, 'keys.json');
 
 app.use(cors());
 app.use(express.json());
+
+// 🔥 SERVIR ARQUIVOS ESTÁTICOS
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 🔥 CORREÇÃO PRINCIPAL (rota "/")
+// 🔥 ROTA PRINCIPAL (RESOLVE O ERRO)
 app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// 🔥 FALLBACK (QUALQUER ROTA ABRE O HTML)
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
@@ -21,8 +28,11 @@ function loadKeys() {
   try {
     if (!fs.existsSync(DB_FILE)) return [];
     return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
+
 function saveKeys(keys) {
   fs.writeFileSync(DB_FILE, JSON.stringify(keys, null, 2));
 }
@@ -55,12 +65,20 @@ app.post('/api/admin/generate', (req, res) => {
   if (password !== ADMIN_PASS) return res.status(401).json({ error: 'Unauthorized' });
 
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const seg = n => Array.from({length: n}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const seg = n => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   const key = `DRAX-${seg(4)}-${seg(4)}-${seg(4)}`;
   const expires = duration === 0 ? 0 : Date.now() + duration * 24 * 60 * 60 * 1000;
 
   const keys = loadKeys();
-  keys.push({ key, maxUsers: maxUsers || 1, duration, expires, created: Date.now(), activeUsers: 0 });
+  keys.push({
+    key,
+    maxUsers: maxUsers || 1,
+    duration,
+    expires,
+    created: Date.now(),
+    activeUsers: 0
+  });
+
   saveKeys(keys);
   res.json({ ok: true, key });
 });
@@ -69,6 +87,7 @@ app.post('/api/admin/generate', (req, res) => {
 app.post('/api/admin/delete', (req, res) => {
   const { password, key } = req.body;
   if (password !== ADMIN_PASS) return res.status(401).json({ error: 'Unauthorized' });
+
   const keys = loadKeys().filter(k => k.key !== key);
   saveKeys(keys);
   res.json({ ok: true });
@@ -78,11 +97,24 @@ app.post('/api/admin/delete', (req, res) => {
 app.post('/api/validate', (req, res) => {
   const { key } = req.body;
   const keys = loadKeys();
+
   const entry = keys.find(k => k.key === key.toUpperCase());
-  if (!entry) return res.json({ valid: false, reason: 'Chave inválida.' });
-  if (entry.duration !== 0 && Date.now() > entry.expires) return res.json({ valid: false, reason: 'Chave expirada.' });
-  if (entry.activeUsers >= entry.maxUsers) return res.json({ valid: false, reason: 'Limite de usuários atingido.' });
+
+  if (!entry) {
+    return res.json({ valid: false, reason: 'Chave inválida.' });
+  }
+
+  if (entry.duration !== 0 && Date.now() > entry.expires) {
+    return res.json({ valid: false, reason: 'Chave expirada.' });
+  }
+
+  if (entry.activeUsers >= entry.maxUsers) {
+    return res.json({ valid: false, reason: 'Limite de usuários atingido.' });
+  }
+
   res.json({ valid: true });
 });
 
-app.listen(PORT, () => console.log(`DRAX server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`DRAX server running on port ${PORT}`);
+});
